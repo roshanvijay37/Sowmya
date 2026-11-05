@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { loadImage, manifest, plateURL, shared } from './core.js';
-import { beam, photo } from './materials.js';
+import { beam, contactShadow, cutout, photo } from './materials.js';
 
-/* Wardrobe. Each portrait hangs as a length of silk over still water, and the world
+/* Wardrobe. Her portraits stand over still water, and the world
    takes on the colour of what she is wearing, walking from green to gold to red, so
    the red velvet curtain at the end of the corridor feels inevitable. */
 export const SPACING = 8.4;
@@ -12,14 +12,27 @@ export function buildSilk() {
   const group = new THREE.Group();
   const items = manifest.silk.map((name, i) => {
     const side = i % 2 ? 1 : -1;
-    const p = photo(name, { height: 5.4, relief: .95, cloth: .22, mirror: true, mist: 1 });
     const z = START_Z - i * SPACING;
     const x = side * 2.45;
-    const y = 2.5;
     const rotY = -side * .5;
-    p.mesh.position.set(x, y, z); p.mesh.rotation.y = rotY;
-    p.mir.position.set(x, -y, z); p.mir.rotation.y = rotY;
-    group.add(p.mesh, p.mir);
+    const free = manifest.free.includes(name);
+    let p, c;
+    if (free) {
+      // Head to toe in the photo: she stands on the water herself.
+      c = cutout(name, { height: 5.1, rim: '#ffe3b4', stencil: false });
+      c.uniforms.uOn.value = 1;
+      c.mesh.position.set(x, 0, z); c.mir.position.set(x, 0, z);
+      group.add(c.mesh, c.mir);
+      const sh = contactShadow(manifest.c[name] * 5.1);
+      sh.position.set(x, .012, z + .05);
+      group.add(sh);
+    } else {
+      // The photo stops at her waist or knees, so it stays whole: nothing about her is cut.
+      p = photo(name, { height: 5.3, relief: .6, frame: 1, mirror: true });
+      p.mesh.position.set(x, 3.05, z); p.mesh.rotation.y = rotY;
+      p.mir.position.set(x, -3.05, z); p.mir.rotation.y = rotY;
+      group.add(p.mesh, p.mir);
+    }
 
     // Behind her, her real surroundings: the photo's own background as a soft cloud of colour.
     const plateU = { uMap: { value: null }, uIn: { value: 0 }, uFog: shared.uFog, uFogAmt: shared.uFogAmt };
@@ -46,7 +59,7 @@ export function buildSilk() {
     shaft.position.set(x - side * 3.2, 12.4, z - .6);
     shaft.rotation.z = side * .25;
     group.add(shaft);
-    return { p, side, z, x };
+    return { p, c, side, z, x, mesh: (p || c).mesh };
   });
 
   // Still water: a dark glass sheet above the upside-down silk.
@@ -70,6 +83,14 @@ export function buildSilk() {
 
   return {
     group, items, water,
-    update() { for (const it of items) it.p.mesh.userData.tick(); },
+    update(cam) {
+      for (const it of items) {
+        it.mesh.userData.tick();
+        if (it.c) {
+          const yaw = Math.max(-.75, Math.min(.75, Math.atan2(cam.position.x - it.x, cam.position.z - it.z)));
+          it.c.mesh.rotation.y = it.c.mir.rotation.y = yaw;
+        }
+      }
+    },
   };
 }

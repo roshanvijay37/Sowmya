@@ -13,7 +13,7 @@ from scipy import ndimage as ndi
 Image.MAX_IMAGE_PIXELS = None
 ROOT = Path(r"C:\Users\USER\Desktop\Workk\Sowmya")
 SRC = Path(r"D:\sowmya-work\originals")
-CUT = Path(r"D:\sowmya-work\cut")
+HQ = Path(r"D:\sowmya-work\hq")
 DEPTH = Path(r"D:\sowmya-work\depth")
 OUT = ROOT / "assets" / "img"
 
@@ -21,7 +21,9 @@ SILK = "solo10 solo6 solo4 solo2 solo8 solo11 solo9".split()
 NIGHTS = """group10 normal3 group4 normal15 group9 normal13 group14 group2 normal5 group13
 group3 normal7 group7 group11 normal8 group6 group12 normal17 group8 normal11 normal6""".split()
 LED = "normal11 group2 normal3 group4".split()
-CUTS = "normal4 normal18 normal14 normal16 normal2 normal12 solo7 profile normal19".split()
+# Freestanding only when the photo shows her head to toe and no one touches her.
+FREE = "solo10 solo6".split()
+CUTS = "solo10 solo6 normal18 normal3 solo7 normal4".split()
 
 
 def fit(im, size):
@@ -38,18 +40,11 @@ def save(im, path, q):
 man = {"p": {}, "c": {}}
 
 for n in SILK:
-    # Wardrobe: the whole frame, background transparent, plus a blurred plate of her real surroundings.
-    im = Image.open(CUT / f"{n}.png").convert("RGBA")
-    man["p"][n] = round(im.width / im.height, 4)
-    save(fit(im, 1700), OUT / "s" / f"{n}.webp", 84)
-    save(fit(im, 1000), OUT / "s" / "m" / f"{n}.webp", 76)
-    d = Image.open(DEPTH / f"{n}.png").convert("L").filter(ImageFilter.GaussianBlur(1.2))
-    save(fit(d, 448), OUT / "d" / f"{n}.webp", 70)
     b = ImageOps.exif_transpose(Image.open(SRC / f"{n}.jpg")).convert("RGB")
     b = fit(b, 300).filter(ImageFilter.GaussianBlur(11))
     save(b, OUT / "b" / f"{n}.webp", 60)
 
-for n in dict.fromkeys(NIGHTS + LED):
+for n in dict.fromkeys(NIGHTS + LED + [s for s in SILK if s not in FREE]):
     im = ImageOps.exif_transpose(Image.open(SRC / f"{n}.jpg")).convert("RGB")
     man["p"][n] = round(im.width / im.height, 4)
     save(fit(im, 1500), OUT / "p" / f"{n}.webp", 80)
@@ -59,22 +54,16 @@ for n in dict.fromkeys(NIGHTS + LED):
     save(fit(d, 448), OUT / "d" / f"{n}.webp", 70)
 
 for n in CUTS:
-    im = Image.open(CUT / f"{n}.png").convert("RGBA")
-    a = np.asarray(im)[:, :, 3]
-    lab, k = ndi.label(a > 40)
-    if k > 1:                       # keep her, drop a stray hand at the frame edge
-        big = 1 + np.argmax(ndi.sum(a > 40, lab, range(1, k + 1)))
-        keep = ndi.binary_dilation(lab == big, iterations=6)
-        arr = np.asarray(im).copy()
-        arr[:, :, 3] = (arr[:, :, 3] * keep).astype(np.uint8)
-        im = Image.fromarray(arr)
-    im = im.crop(im.getbbox())
+    im = Image.open(HQ / f"{n}.png").convert("RGBA")   # already trimmed, RGB is clean foreground
     man["c"][n] = round(im.width / im.height, 4)
-    save(fit(im, 1700), OUT / "c" / f"{n}.webp", 86)
-    save(fit(im, 1000), OUT / "c" / "m" / f"{n}.webp", 78)
+    for size, q, sub in ((1700, 90, ""), (1000, 82, "m/")):
+        path = OUT / "c" / f"{sub}{n}.webp"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # exact=True keeps colour under transparent pixels, or scaling draws a dark line round her.
+        fit(im, size).save(path, "WEBP", quality=q, alpha_quality=100, method=6, exact=True)
 
 (ROOT / "src" / "manifest.json").write_text(json.dumps(
-    {**man, "silk": SILK, "nights": NIGHTS, "led": LED, "cuts": CUTS}, indent=0))
+    {**man, "silk": SILK, "free": FREE, "nights": NIGHTS, "led": LED, "cuts": CUTS}, indent=0))
 
 tot = sum(f.stat().st_size for f in OUT.rglob("*.webp"))
 desk = sum(f.stat().st_size for f in OUT.rglob("*.webp") if "\\m\\" not in str(f))

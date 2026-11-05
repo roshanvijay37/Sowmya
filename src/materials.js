@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { shared, loadImage, photoURL, cutURL, silkURL, depthURL, manifest, isMobile } from './core.js';
+import { shared, loadImage, photoURL, cutURL, depthURL, manifest, isMobile } from './core.js';
 
 /* Floor reflections are real geometry drawn upside down below y=0. The stencil keeps
    them inside the catwalk, so the wide wall behind does not leak into the crowd. */
@@ -31,7 +31,7 @@ void main(){
   gl_Position = projectionMatrix * mv;
 }`;
 const photoFrag = /* glsl */`
-uniform sampler2D uMap, uD; uniform float uIn, uMirror, uFogAmt, uFrame, uTime, uOpacity, uMist; uniform vec3 uFog, uTint;
+uniform sampler2D uMap; uniform float uIn, uMirror, uFogAmt, uFrame, uTime, uOpacity; uniform vec3 uFog, uTint;
 varying vec2 vUv; varying float vWave; varying vec3 vW; varying float vDist;
 void main(){
   vec2 uv = vUv;
@@ -50,12 +50,6 @@ void main(){
     c = mix(c, vec3(1.9,1.35,.62) * uFrame, f);
   }
   float a = uOpacity;
-  if (uMist > 0.) {
-    // Wardrobe photos carry her own cut-out in alpha; her hem sinks into the mist on the water.
-    float al = uMirror > .5 ? textureLod(uMap, uv, 1.5 + h*3.5).a : texture2D(uMap, uv).a;
-    if (al < .01) discard;
-    a *= al * uIn * smoothstep(.015,.17,vUv.y);
-  }
   if (uMirror > .5) { a *= pow(1.-h, 1.6) * .55; c *= .8; }
   float fog = 1. - exp(-vDist * uFogAmt);
   c = mix(c, uFog, clamp(fog, 0., 1.));
@@ -71,7 +65,7 @@ export function photo(name, opts = {}) {
   const uniforms = {
     uMap: { value: null }, uD: { value: null }, uIn: { value: 0 }, uRelief: { value: relief },
     uDepthOn: { value: 0 }, uCloth: { value: cloth }, uBend: { value: bend }, uMirror: { value: 0 },
-    uFrame: { value: frame }, uOpacity: { value: 1 }, uMist: { value: opts.mist || 0 }, uTint: { value: new THREE.Color(tint).convertSRGBToLinear() },
+    uFrame: { value: frame }, uOpacity: { value: 1 }, uTint: { value: new THREE.Color(tint).convertSRGBToLinear() },
     uTime: shared.uTime, uFog: shared.uFog, uFogAmt: shared.uFogAmt,
   };
   const mat = new THREE.ShaderMaterial({
@@ -93,7 +87,7 @@ export function photo(name, opts = {}) {
     mir.renderOrder = -2;
   }
   let fadeStart = 0;
-  loadImage(opts.mist ? silkURL(name) : photoURL(name), (t) => { uniforms.uMap.value = t; fadeStart = performance.now(); mesh.userData.fade = fadeStart; });
+  loadImage(photoURL(name), (t) => { uniforms.uMap.value = t; fadeStart = performance.now(); mesh.userData.fade = fadeStart; });
   loadImage(depthURL(name), (t) => { uniforms.uD.value = t; uniforms.uDepthOn.value = 1; }, true);
   mesh.userData.tick = () => {
     if (mesh.userData.fade) uniforms.uIn.value = Math.min(1, (performance.now() - mesh.userData.fade) / 900);
@@ -122,14 +116,13 @@ void main(){
   vec3 c = t.rgb * mix(.3, 1., uOn);
   float soft = textureLod(uMap, uv, 4.5).a;
   float rim = clamp((1. - soft) * 1.9, 0., 1.);
-  c += uRim * rim * rim * (.25 + .75*uOn) * .55;
-  float foot = smoothstep(0., .035, vUv.y);
-  if (uMirror > .5) { a *= pow(1.-h, 2.)*.5; c *= .85; } else a *= foot;
+  c += uRim * rim * rim * uOn * .16;
+  if (uMirror > .5) { a *= pow(1.-h, 2.)*.5; c *= .85; }
   gl_FragColor = vec4(c, a);
 }`;
 
 export function cutout(name, opts = {}) {
-  const { height = 3.1, rim = '#ff3fa0' } = opts;
+  const { height = 3.1, rim = '#ff3fa0', stencil = true } = opts;
   const aspect = manifest.c[name];
   const W = height * aspect;
   const geo = new THREE.PlaneGeometry(W, height);
@@ -141,7 +134,7 @@ export function cutout(name, opts = {}) {
   const make = (m) => new THREE.ShaderMaterial({
     vertexShader: cutVert, fragmentShader: cutFrag, transparent: true, depthWrite: false,
     side: THREE.DoubleSide, uniforms: m ? { ...uniforms, uMirror: { value: 1 } } : uniforms,
-    ...(m ? stencilled : {}),
+    ...(m && stencil ? stencilled : {}),
   });
   const mesh = new THREE.Mesh(geo, make(false));
   const mir = new THREE.Mesh(geo, make(true));
@@ -204,6 +197,19 @@ export function pool(radius, color, power = 1) {
       void main(){ float r=length(vUv)*2.; float a=pow(max(0.,1.-r),1.5)+.0; gl_FragColor=vec4(uC*uP*a,a); }`,
   });
   const m = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), mat);
+  m.rotation.x = -Math.PI / 2;
+  m.renderOrder = 1;
+  return m;
+}
+
+/* The soft dark where her feet meet the floor, so she stands instead of hovering. */
+export function contactShadow(width) {
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main(){vUv=uv-.5; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader: `varying vec2 vUv; void main(){ float r=length(vUv*vec2(2.,2.)); float a=pow(max(0.,1.-r),1.2)*.92; gl_FragColor=vec4(0.,0.,0.,a); }`,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(width * 1.5, width * .55), mat);
   m.rotation.x = -Math.PI / 2;
   m.renderOrder = 1;
   return m;

@@ -1,12 +1,5 @@
 {
 "p": {
-"solo10": 0.6667,
-"solo6": 0.6667,
-"solo4": 0.6667,
-"solo2": 0.6667,
-"solo8": 0.6667,
-"solo11": 0.8,
-"solo9": 0.6671,
 "group10": 1.5006,
 "normal3": 1.4567,
 "group4": 1.5,
@@ -27,18 +20,20 @@
 "normal17": 1.5,
 "group8": 0.75,
 "normal11": 1.503,
-"normal6": 1.1422
+"normal6": 1.1422,
+"solo4": 0.6667,
+"solo2": 0.6668,
+"solo8": 0.6667,
+"solo11": 0.8,
+"solo9": 0.667
 },
 "c": {
-"normal4": 0.587,
-"normal18": 0.292,
-"normal14": 0.3107,
-"normal16": 0.3808,
-"normal2": 0.4199,
-"normal12": 0.3911,
-"solo7": 0.3931,
-"profile": 0.5825,
-"normal19": 0.266
+"solo10": 0.3327,
+"solo6": 0.4807,
+"normal18": 0.2929,
+"normal3": 0.4165,
+"solo7": 0.3955,
+"normal4": 0.5913
 },
 "silk": [
 "solo10",
@@ -48,6 +43,10 @@
 "solo8",
 "solo11",
 "solo9"
+],
+"free": [
+"solo10",
+"solo6"
 ],
 "nights": [
 "group10",
@@ -79,14 +78,11 @@
 "group4"
 ],
 "cuts": [
-"normal4",
+"solo10",
+"solo6",
 "normal18",
-"normal14",
-"normal16",
-"normal2",
-"normal12",
+"normal3",
 "solo7",
-"profile",
-"normal19"
+"normal4"
 ]
 }

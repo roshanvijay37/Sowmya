@@ -64,7 +64,6 @@ export const loadState = () => ({ total, done });
 const sz = isMobile ? 'm/' : '';
 export const photoURL = (n) => `assets/img/p/${sz}${n}.webp`;
 export const cutURL = (n) => `assets/img/c/${sz}${n}.webp`;
-export const silkURL = (n) => `assets/img/s/${sz}${n}.webp`;
 export const plateURL = (n) => `assets/img/b/${n}.webp`;
 export const depthURL = (n) => `assets/img/d/${n}.webp`;
 export { manifest };

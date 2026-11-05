@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { isMobile, loadImage, manifest, photoURL, shared, smooth, range, clamp, lerp } from './core.js';
-import { beam, cutout, pool, stencilled } from './materials.js';
+import { beam, contactShadow, cutout, pool, stencilled } from './materials.js';
 import { crowd, fountain } from './particles.js';
 import { gold, logoGeometry } from './hero.js';
 
@@ -8,11 +8,9 @@ export const STAGE = { curtainZ: -74, wallZ: -134, topZ: -128 };
 
 /* Line-up along the catwalk. Her real looks, from real nights. */
 export const LINEUP = [
-  { name: 'normal18', z: -85, side: -1, rim: '#ff4f7e' },
-  { name: 'normal14', z: -93, side: 1, rim: '#59b7ff' },
-  { name: 'normal16', z: -101, side: -1, rim: '#ffd27a' },
-  { name: 'normal2', z: -109, side: 1, rim: '#ff42b0' },
-  { name: 'normal12', z: -117, side: -1, rim: '#9a7bff' },
+  { name: 'normal18', z: -88, side: -1, rim: '#ff4f7e' },
+  { name: 'normal3', z: -100, side: 1, rim: '#ffd27a' },
+  { name: 'solo7', z: -112, side: -1, rim: '#ff42b0' },
   { name: 'normal4', z: -124.5, side: 0, rim: '#ffe0a8' },
 ];
 
@@ -330,6 +328,9 @@ export function buildStage(scene) {
     const p = pool(2.2, '#ffe9c8', .34);
     p.position.set(x, .012, d.z);
     group.add(p);
+    const sh = contactShadow(manifest.c[d.name] * (d.side === 0 ? 3.55 : 3.15));
+    sh.position.set(x, .016, d.z + .05);
+    group.add(sh);
     return { ...d, c, x, spot, pool: p };
   });
 
@@ -404,7 +405,7 @@ export function buildStage(scene) {
         if (b.tex) { u.uB.value = b.tex; u.uBa.value = b.a; }
         u.uMix.value = 0;
       } else u.uMix.value = smooth(elapsed, CYCLE - 1.1, CYCLE);
-      u.uGain.value = 1.18 - .72 * smooth(s, .64, .675) * (1 - smooth(s, .715, .74));  // the wall steps back for her centre-stage moment
+      u.uGain.value = 1.18 - .92 * smooth(s, .64, .675) * (1 - smooth(s, .715, .74));  // the wall steps back for her centre-stage moment
 
       const fin = smooth(s, .9, .985);
       finale.material.emissiveIntensity = .06 + fin * .2;

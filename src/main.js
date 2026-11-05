@@ -139,13 +139,13 @@ manifest.silk.forEach((_, i) => {
 });
 take2.push(K(.45, V(0, 2.1, -70), V(0, 3, -90), 46));
 take2.push(K(.49, V(0, 2.3, -76.5), V(0, 2.4, -100), 48));
-const stageT = (i) => .515 + i * .032;
-LINEUP.slice(0, 5).forEach((d, i) => {
+const stageT = (i) => .52 + i * .05;
+LINEUP.slice(0, -1).forEach((d, i) => {
   take2.push(K(stageT(i), V(-d.side * .95, 1.45, d.z + 4.3), V(d.side * 1.25, 1.75, d.z), 40, d.side * .02));
 });
-take2.push(K(.67, V(.0, 1.5, -116.5), V(0, 2.2, -124.5), 40));
-take2.push(K(.69, V(1.4, 1.25, -119.3), V(0, 2.05, -124.5), 40, .02));
-take2.push(K(.712, V(-1.1, 2.1, -119), V(0, 2.1, -124.5), 42, -.015));
+take2.push(K(.67, V(.0, 1.55, -115.5), V(0, 1.85, -124.5), 40));
+take2.push(K(.69, V(1.5, 1.4, -117), V(0, 1.82, -124.5), 40, .02));
+take2.push(K(.712, V(-1.2, 1.9, -116.8), V(0, 1.82, -124.5), 42, -.015));
 take2.push(K(.735, V(0, 7, -113), V(0, 12, -124), 48));
 take2.push(K(.75, V(0, 13, -104), V(HELIX.r * Math.cos(panelAngle(0)), 15, HELIX.z + HELIX.r * Math.sin(panelAngle(0))), 50));
 const nightN = manifest.nights.length;
@@ -343,7 +343,7 @@ function drive(dt) {
     dustP.uniforms.uPx.value = pixelRatio;
   } else hero.mic.core.visible = false;
 
-  if (silk.group.visible) silk.update();
+  if (silk.group.visible) silk.update(camera);
   if (stage.group.visible) stage.update(s, time, camera, pixelRatio);
   nights.update(s);
 
@@ -365,7 +365,7 @@ function drive(dt) {
 
   const f = finish.uniforms;
   // The cut inside the mic: a white-gold flash, or a dark dip for reduced-motion viewers.
-  const cutOn = smooth(s, .152, .168) * (1 - smooth(s, .172, .2));
+  const cutOn = smooth(s, .152, .168) * (1 - smooth(s, .172, .184));
   f.uFlash.value = calm ? 0 : cutOn;
   f.uBlack.value = Math.max(1 - smooth(introT, 0, .4), calm ? cutOn : 0);
   f.uCA.value = clamp(Math.abs(vel) * 60, 0, 1);
@@ -407,7 +407,7 @@ window.__show = {
     s = target01 = v; vel = 0; introT = 10; shared.uTime.value = time;
     window.scrollTo(0, v * sMax());
     pointer.x = pointer.y = pointer.tx = pointer.ty = 0;
-    for (const o of [...silk.items.map(i => i.p.mesh), ...nights.items.map(i => i.p.mesh), ...stage.dancers.map(d => d.c.mesh)]) o.userData.fade = 1;
+    for (const o of [...silk.items.map(i => i.mesh), ...nights.items.map(i => i.p.mesh), ...stage.dancers.map(d => d.c.mesh)]) o.userData.fade = 1;
     drive(.016);
     composer.render();
   },
