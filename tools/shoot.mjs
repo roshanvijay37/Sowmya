@@ -28,7 +28,7 @@ ws.onmessage = (m) => {
 const send = (method, params = {}) => new Promise(r => { const i = ++id; wait.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: 1, mobile: mob === '1' });
-await send('Page.navigate', { url: process.env.BASE || `http://127.0.0.1:${PORT}/index.html` });
+await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__noAdapt=true' }); await send('Page.navigate', { url: process.env.BASE || `http://127.0.0.1:${PORT}/index.html` });
 const ev = async (e) => (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true })).result;
 
 for (let i = 0; i < 200; i++) {

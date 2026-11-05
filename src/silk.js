@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loadImage, manifest, plateURL, shared } from './core.js';
+import { loadImage, manifest, plateURL, shared, smooth as smoothRange } from './core.js';
 import { beam, contactShadow, cutout, photo } from './materials.js';
 
 /* Wardrobe. Her portraits stand over still water, and the world
@@ -19,11 +19,11 @@ export function buildSilk() {
     let p, c;
     if (free) {
       // Head to toe in the photo: she stands on the water herself.
-      c = cutout(name, { height: 5.1, rim: '#ffe3b4', stencil: false });
+      c = cutout(name, { height: 4.5, rim: '#ffe3b4', stencil: false });
       c.uniforms.uOn.value = 1;
       c.mesh.position.set(x, 0, z); c.mir.position.set(x, 0, z);
       group.add(c.mesh, c.mir);
-      const sh = contactShadow(manifest.c[name] * 5.1);
+      const sh = contactShadow(manifest.c[name] * 4.5);
       sh.position.set(x, .012, z + .05);
       group.add(sh);
     } else {
@@ -42,7 +42,7 @@ export function buildSilk() {
       fragmentShader: `uniform sampler2D uMap; uniform float uIn, uFogAmt; uniform vec3 uFog; varying vec2 vUv; varying float vD;
         void main(){
           vec2 q=(vUv-.5)*2.;
-          float a=pow(max(0.,1.-dot(q,q)),2.4);
+          float a=pow(max(0.,1.-dot(q,q)),2.4)*smoothstep(4.,10.,vD);   // never a grey wall across the lens
           vec3 c=texture2D(uMap, vUv*.8+.1).rgb;
           float l=dot(c,vec3(.3,.6,.1));
           c=mix(vec3(l),c,1.5)*.62;                 // richer and calmer than the raw background
@@ -86,6 +86,11 @@ export function buildSilk() {
     update(cam) {
       for (const it of items) {
         it.mesh.userData.tick();
+        // Anything the camera brushes past dissolves, rather than filling the frame as a headless slab.
+        const d = Math.hypot(cam.position.x - it.x, cam.position.z - it.z);
+        const near = smoothRange(d, it.c ? 2 : 2.9, it.c ? 3.8 : 4.7);
+        if (it.c) it.c.uniforms.uNear.value = near;
+        else it.p.uniforms.uOpacity.value = near;
         if (it.c) {
           const yaw = Math.max(-.75, Math.min(.75, Math.atan2(cam.position.x - it.x, cam.position.z - it.z)));
           it.c.mesh.rotation.y = it.c.mir.rotation.y = yaw;

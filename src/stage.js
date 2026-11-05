@@ -75,13 +75,13 @@ function ledCenter() {
   const W = 26, H = 12.5;
   const uniforms = {
     uA: { value: null }, uB: { value: null }, uAa: { value: 1 }, uBa: { value: 1 }, uMix: { value: 0 },
-    uGain: { value: 1 }, uTime: shared.uTime, uIn: { value: 0 }, uWA: { value: W / H },
+    uGain: { value: 1 }, uTime: shared.uTime, uIn: { value: 0 }, uWA: { value: W / H }, uAbs: { value: 0 },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms, transparent: true, side: THREE.DoubleSide, stencilWrite: false,
     vertexShader: 'varying vec2 vUv; void main(){vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader: /* glsl */`
-      uniform sampler2D uA, uB; uniform float uMix, uGain, uAa, uBa, uWA, uIn, uTime; varying vec2 vUv;
+      uniform sampler2D uA, uB; uniform float uMix, uGain, uAa, uBa, uWA, uIn, uTime, uAbs; varying vec2 vUv;
       vec2 cover(vec2 uv, float a){ vec2 s = a>uWA ? vec2(uWA/a,1.) : vec2(1.,a/uWA); return (uv-.5)*s+.5; }
       void main(){
         vec2 cells = vec2(320.,154.);
@@ -90,6 +90,10 @@ function ledCenter() {
         vec3 a = texture2D(uA, cover(uv,uAa)).rgb, b = texture2D(uB, cover(uv,uBa)).rgb;
         float wipe = smoothstep(-.12,.12, uMix*1.3-.15 - (1.-vUv.y));
         vec3 c = mix(a,b,wipe);
+        // While she is centre stage the wall gives way to pure light: no giant cropped bodies behind her.
+        float bars = smoothstep(.5,.98,sin(abs(uv.x-.5)*20. - uTime*1.2 + sin(uv.y*5.+uTime*.3)*1.3));
+        vec3 glow = mix(vec3(1.2,.08,.42), vec3(1.25,.72,.2), uv.y)*(bars*.8+.05);
+        c = mix(c, glow, uAbs);
         vec2 f = fract(g)-.5;
         float dots = smoothstep(.62,.25,length(f));
         float w = fwidth(g.x);
@@ -104,12 +108,12 @@ function ledCenter() {
     uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide, ...stencilled, blending: THREE.AdditiveBlending,
     vertexShader: mat.vertexShader,
     fragmentShader: /* glsl */`
-      uniform sampler2D uA, uB; uniform float uMix, uGain, uAa, uBa, uWA, uIn; varying vec2 vUv;
+      uniform sampler2D uA, uB; uniform float uMix, uGain, uAa, uBa, uWA, uIn, uAbs; varying vec2 vUv;
       vec2 cover(vec2 uv, float a){ vec2 s = a>uWA ? vec2(uWA/a,1.) : vec2(1.,a/uWA); return (uv-.5)*s+.5; }
       void main(){
         float wipe = step(.5,uMix);
         vec3 c = wipe>.5 ? textureLod(uB, cover(vUv,uBa), 4.).rgb : textureLod(uA, cover(vUv,uAa), 4.).rgb;
-        gl_FragColor = vec4(c*.16*uGain*uIn, 1.);
+        gl_FragColor = vec4(c*.2*uGain*uIn*(1.-uAbs*.6), 1.);
       }`,
   });
   const mir = new THREE.Mesh(geo, mirM);
@@ -144,7 +148,7 @@ function ledWing(side) {
 
 /* A dot-matrix ticker carrying the real shows, as read off her stage backdrops. */
 const TICKER = "SOWMYA KOTIAN  ✦  EMCEE  ✦  ANCHOR  ✦  NAMMA TV DANCE WARRIORS 4  ✦  MANGALORE DASARA  ✦  RED FM TULU FILM AWARDS  ✦  KARNATAKA'S BEST DANCER  ✦  FUN GALAXY FREEDOM FESTIVAL  ✦  ";
-function ticker(width) {
+function ticker(width, H = 1.1) {
   const c = document.createElement('canvas'); c.width = 4096; c.height = 96;
   const g = c.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, 4096, 96);
@@ -158,7 +162,6 @@ function ticker(width) {
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
-  const H = 1.1;
   const uniforms = {
     uT: { value: tex }, uTime: shared.uTime, uRep: { value: width / H / (4096 / 96) * 1.05 },
     uCells: { value: new THREE.Vector2(width * 26, H * 26) },
@@ -246,8 +249,9 @@ export function buildStage(scene) {
       uniform float uTime; varying vec3 vW;
       void main(){
         float seams = smoothstep(.02,.0,abs(fract(vW.z/2.)-.5)-.494);
-        vec3 c = vec3(.012,.012,.018) + seams*.035;
-        gl_FragColor=vec4(c,.8);
+        float wall = smoothstep(-80.,-134.,vW.z);
+        vec3 c = vec3(.004,.003,.007) + seams*.01 + vec3(.05,.006,.03)*wall*wall;
+        gl_FragColor=vec4(c,.86);
       }`,
   });
   floorShapes.forEach((g) => { const m = new THREE.Mesh(g, floorMat); m.renderOrder = -1; m.frustumCulled = false; group.add(m); });
@@ -294,8 +298,8 @@ export function buildStage(scene) {
   }));
 
   /* Tickers */
-  const t1 = ticker(26); t1.m.position.set(0, 8.25, -81); group.add(t1.m);
-  const t2 = ticker(26); t2.m.position.set(0, 8.25, -113); group.add(t2.m);
+  // One ticker on the wall's top edge: same depth as the wall, so it can never cross her name.
+  const t1 = ticker(44, 1.7); t1.m.position.set(0, 13.55, wallZ + .2); group.add(t1.m);
 
   trussBeams(group);
 
@@ -325,7 +329,7 @@ export function buildStage(scene) {
     const spot = beam({ len: 9.4, top: .08, bottom: 1.55, color: '#fff0d8', power: .8 });
     spot.position.set(x, 9.4, d.z);
     group.add(spot);
-    const p = pool(2.2, '#ffe9c8', .34);
+    const p = pool(2.2, '#ffe9c8', .15);
     p.position.set(x, .012, d.z);
     group.add(p);
     const sh = contactShadow(manifest.c[d.name] * (d.side === 0 ? 3.55 : 3.15));
@@ -343,7 +347,7 @@ export function buildStage(scene) {
 
   /* The closing signature above the wall */
   const finale = new THREE.Mesh(logoGeometry(34, .5), gold({ roughness: .36, envMapIntensity: .75, emissive: '#6b4310', emissiveIntensity: .06 }));
-  finale.position.set(0, 23.5, wallZ - 1);
+  finale.position.set(0, 26.4, wallZ - 1);
   group.add(finale);
   const fKey = new THREE.DirectionalLight('#ffe7c0', .9);
   fKey.position.set(-46, 34, -96); fKey.target = finale;
@@ -362,10 +366,9 @@ export function buildStage(scene) {
 
   return {
     group, centre, wings, people, pyros, dancers, cl, cr, finale, fKey,
-    update(s, time, cam, px) {
+    update(s, time, cam, px, calm) {
       // Behind the camera for the rest of the show, and in the way of the last wide shot.
       cl.m.visible = cr.m.visible = pelmet.visible = s < .6;
-      t1.m.visible = s < .9;
       const open = smooth(s, .432, .492);
       cl.uniforms.uOpen.value = open;
       cr.uniforms.uOpen.value = open;
@@ -382,14 +385,15 @@ export function buildStage(scene) {
         const on = d.side === 0 ? smooth(near, 12, 7.5) : smooth(near, 9.5, 6.6);
         const lit = s > .7 ? 1 : on;
         d.c.uniforms.uOn.value = lit;
+        d.c.uniforms.uNear.value = smooth(Math.hypot(cam.position.x - d.x, cam.position.z - d.z), 2.8, 4.6);
         const a = Math.atan2(cam.position.x - d.x, cam.position.z - d.z);
         const yaw = clamp(a, -.75, .75);
         d.c.mesh.rotation.y = yaw; d.c.mir.rotation.y = yaw;
         d.spot.material.uniforms.uPower.value = .55 * lit;
-        d.pool.material.uniforms.uP.value = .34 * lit;
+        d.pool.material.uniforms.uP.value = .15 * lit;
       }
 
-      const pyro = smooth(s, .6, .66);
+      const pyro = calm ? 0 : smooth(s, .6, .66);
       pyros.forEach((f) => { f.uniforms.uAmt.value = pyro; f.uniforms.uPx.value = px; });
 
       people.uniforms.uAmt.value = smooth(s, .48, .54);
@@ -405,12 +409,13 @@ export function buildStage(scene) {
         if (b.tex) { u.uB.value = b.tex; u.uBa.value = b.a; }
         u.uMix.value = 0;
       } else u.uMix.value = smooth(elapsed, CYCLE - 1.1, CYCLE);
-      u.uGain.value = 1.18 - .92 * smooth(s, .64, .675) * (1 - smooth(s, .715, .74));  // the wall steps back for her centre-stage moment
+      u.uGain.value = 1.18;
+      u.uAbs.value = smooth(s, .615, .655) * (1 - smooth(s, .722, .745));
 
       const fin = smooth(s, .9, .985);
-      finale.material.emissiveIntensity = .06 + fin * .2;
-      finale.material.envMapIntensity = .75 + fin * 1.05;
-      fKey.intensity = .9 + fin * 1.2;
+      finale.material.emissiveIntensity = .06 + fin * .34;
+      finale.material.envMapIntensity = .75 + fin * 1.75;
+      fKey.intensity = .9 + fin * 2.4;
       searchlights.forEach((b, i) => {
         b.visible = fin > .001;
         b.material.uniforms.uPower.value = fin * .5;

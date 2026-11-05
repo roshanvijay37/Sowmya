@@ -35,7 +35,12 @@ function pump() {
       job.cb(tex);
       active--; done++;
       pump();
-    }, undefined, () => { active--; done++; console.warn('image failed', job.url); pump(); });
+    }, undefined, () => {
+      active--;
+      if (!job.retried) { job.retried = true; setTimeout(() => { queue.push(job); pump(); }, 1500); }
+      else { done++; console.warn('image failed', job.url); }
+      pump();
+    });
   }
 }
 

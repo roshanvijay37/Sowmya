@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp, damp, isMobile, lerp, loadState, range, setRenderer, shared, smooth, manifest } from './core.js';
+import { PANEL_H } from './nights.js';
 import { buildHero } from './hero.js';
 import { buildSilk, SPACING, START_Z } from './silk.js';
 import { buildStage, LINEUP } from './stage.js';
@@ -17,24 +18,29 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function webgl2() {
   try { return !!document.createElement('canvas').getContext('webgl2'); } catch { return false; }
 }
-if (!webgl2() || params.has('plain')) {
-  document.documentElement.classList.add('plain');
-  throw new Error('plain mode');
+function plainPage(why) {
+  document.documentElement.classList.remove('js', 'live');
+  throw new Error('plain mode: ' + why);
 }
+if (!webgl2() || params.has('plain')) plainPage('no webgl2');
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, stencil: true, powerPreference: 'high-performance' });
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, stencil: true, powerPreference: 'high-performance' });
+} catch (e) { plainPage(e.message); }
 setRenderer(renderer);
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // the final pass does the sRGB encode
 renderer.autoClear = true;
 
-let pixelRatio = Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 1.75);
+const maxRatio = Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 1.75);
+let pixelRatio = maxRatio;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#000');
 const camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, .04, 400);
 
 /* -------- Light the metal: a small stage rig rendered into a reflection map. */
-{
+function buildEnvironment() {
   const env = new THREE.Scene();
   env.background = new THREE.Color('#050406');
   const add = (w, h, x, y, z, c, k) => {
@@ -51,6 +57,10 @@ const camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, .04, 40
   scene.environment = pm.fromScene(env, .03).texture;
   pm.dispose();
 }
+buildEnvironment();
+// A phone can drop the GPU when it is backgrounded; keep the page alive and relight the metal on return.
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+canvas.addEventListener('webglcontextrestored', buildEnvironment);
 
 /* -------- Sky: a colour wash that follows the mood of each act. */
 const skyU = { uTop: { value: new THREE.Color() }, uBot: { value: new THREE.Color() }, uTime: shared.uTime };
@@ -131,17 +141,21 @@ const take1 = [
 ];
 
 const sideZ = (i) => START_Z - i * SPACING;
+const tallFov = (f, a) => (a >= 1.4 ? f : clamp(f * (1 + (1.4 - a) * .62), f, 78));
+let lockedAspect = innerWidth / innerHeight;
+function buildTake2() {
 const take2 = [K(.17, V(.3, 1.9, -1.5), V(-1, 2.2, -10), 46)];
 manifest.silk.forEach((_, i) => {
   const side = i % 2 ? 1 : -1;
   const t = .19 + i * (.235 / 6);
-  take2.push(K(t, V(-side * .5, 2.2 + Math.sin(i) * .15, sideZ(i) + 5.8), V(side * 2.25, 2.6, sideZ(i)), 44, side * .025));
+  const free = manifest.free.includes(manifest.silk[i]);
+  take2.push(K(t, V(-side * .5, 2.2 + Math.sin(i) * .15, sideZ(i) + (free ? 6.9 : 7.3)), V(side * 2.25, free ? 2.3 : 3.05, sideZ(i)), 44, side * .025));
 });
 take2.push(K(.45, V(0, 2.1, -70), V(0, 3, -90), 46));
 take2.push(K(.49, V(0, 2.3, -76.5), V(0, 2.4, -100), 48));
 const stageT = (i) => .52 + i * .05;
 LINEUP.slice(0, -1).forEach((d, i) => {
-  take2.push(K(stageT(i), V(-d.side * .95, 1.45, d.z + 4.3), V(d.side * 1.25, 1.75, d.z), 40, d.side * .02));
+  take2.push(K(stageT(i), V(-d.side * .95, 1.5, d.z + 6), V(d.side * 1.25, 1.7, d.z), 40, d.side * .02));
 });
 take2.push(K(.67, V(.0, 1.55, -115.5), V(0, 1.85, -124.5), 40));
 take2.push(K(.69, V(1.5, 1.4, -117), V(0, 1.82, -124.5), 40, .02));
@@ -149,16 +163,23 @@ take2.push(K(.712, V(-1.2, 1.9, -116.8), V(0, 1.82, -124.5), 42, -.015));
 take2.push(K(.735, V(0, 7, -113), V(0, 12, -124), 48));
 take2.push(K(.75, V(0, 13, -104), V(HELIX.r * Math.cos(panelAngle(0)), 15, HELIX.z + HELIX.r * Math.sin(panelAngle(0))), 50));
 const nightN = manifest.nights.length;
-manifest.nights.forEach((_, i) => {
+manifest.nights.forEach((name, i) => {
   const a = panelAngle(i);
-  const t = .765 + i * (.115 / (nightN - 1));
+  const t = .765 + i * (.112 / (nightN - 1));
   const y = HELIX.y0 + i * HELIX.stepY;
-  const back = innerWidth / innerHeight < .8 ? -2.2 : 3.1;
+  // Stand exactly far enough back to see the whole photo on this screen, not a fixed distance.
+  const aspect = lockedAspect;
+  const v = THREE.MathUtils.degToRad(tallFov(46, aspect)) / 2;
+  const width = PANEL_H(name) * manifest.p[name];
+  const dist = clamp(width * 1.1 / (2 * Math.tan(v) * aspect), 4.6, HELIX.r + 3.1);
+  const back = dist - HELIX.r;
   take2.push(K(t, V(-Math.cos(a) * back, y + .1, HELIX.z - Math.sin(a) * back), V(Math.cos(a) * HELIX.r, y, HELIX.z + Math.sin(a) * HELIX.r), 46));
 });
 take2.push(K(.905, V(0, 56, -92), V(0, 30, -133), 46));
-take2.push(K(.95, V(0, 27, -68), V(0, 18, -133), 44));
-take2.push(K(1, V(0, 15, -63), V(0, 15.5, -133), 44));
+take2.push(K(.95, V(0, 27, -68), V(0, 19, -133), 44));
+take2.push(K(1, V(0, 15, -63), V(0, 17, -133), 44));
+return take2;
+}
 
 function makeTake(keys) {
   return {
@@ -167,7 +188,12 @@ function makeTake(keys) {
     look: new THREE.CatmullRomCurve3(keys.map(k => k.l), false, 'catmullrom', .5),
   };
 }
-const takes = [makeTake(take1), makeTake(take2)];
+const takes = [makeTake(take1), makeTake(buildTake2())];
+// Turning a phone changes how far back each photo needs the camera.
+function reframe() {
+  lockedAspect = camera.aspect;
+  takes[1] = makeTake(buildTake2());
+}
 const CUT = .17;
 const pos = new THREE.Vector3(), look = new THREE.Vector3();
 function cameraAt(s) {
@@ -259,7 +285,7 @@ const CUES = [
 ];
 const cueN = document.getElementById('cue-n'), cueT = document.getElementById('cue-t');
 const bar = document.getElementById('bar'), hint = document.getElementById('hint');
-const end = document.getElementById('end');
+const end = document.getElementById('end'), who = document.getElementById('who');
 let cueShown = -1;
 function hud(sv) {
   let idx = 0;
@@ -270,21 +296,25 @@ function hud(sv) {
   }
   bar.style.transform = `scaleY(${sv})`;
   hint.style.opacity = sv < .008 ? 1 : 0;
+  who.style.opacity = 1 - smooth(sv, .006, .03);
   const e = smooth(sv, .955, .99);
   end.style.opacity = e;
   end.style.pointerEvents = e > .6 ? 'auto' : 'none';
+  end.inert = e <= .6;                 // hidden links must not take a tap or keyboard focus
   end.style.transform = `translateY(${(1 - e) * 26}px)`;
   document.body.classList.toggle('ended', e > .5);
 }
 
 /* -------- Layout */
-let lastW = innerWidth, lastH = innerHeight;
+const viewW = () => canvas.clientWidth || innerWidth, viewH = () => canvas.clientHeight || innerHeight;
+let lastW = viewW(), lastH = viewH();
 function resize(force) {
-  const w = innerWidth, h = innerHeight;
-  // Phone browsers resize constantly as the URL bar slides; only a real change counts.
-  if (!force && w === lastW && Math.abs(h - lastH) < 140) return;
+  // The canvas keeps the tall viewport height, so the URL bar sliding changes nothing and faces never stretch.
+  const w = viewW(), h = viewH();
+  if (!force && w === lastW && h === lastH) return;
   lastW = w; lastH = h;
   camera.aspect = w / h;
+  if ((camera.aspect < 1) !== (lockedAspect < 1)) reframe();
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(w, h, false);
   composer.setPixelRatio(pixelRatio);
@@ -293,19 +323,17 @@ function resize(force) {
 }
 addEventListener('resize', () => resize(false));
 renderer.setPixelRatio(pixelRatio);
-renderer.setSize(innerWidth, innerHeight, false);
-camera.aspect = innerWidth / innerHeight;
+renderer.setSize(viewW(), viewH(), false);
+camera.aspect = viewW() / viewH();
+lockedAspect = camera.aspect;
+takes[1] = makeTake(buildTake2());
 
-const fovFor = (f) => {
-  const a = camera.aspect;
-  if (a >= 1.4) return f;
-  // Keep the horizontal view on tall phones instead of cropping the world to a slit.
-  return clamp(f * (1 + (1.4 - a) * .62), f, 78);
-};
+// Keep the horizontal view on tall phones instead of cropping the world to a slit.
+const fovFor = (f) => tallFov(f, camera.aspect);
 
 /* -------- Frame */
 const clock = new THREE.Clock();
-let introT = 0, frames = 0, msSum = 0, dropped = 0;
+let introT = 0, frames = 0, msSum = 0, fast = 0;
 const INTRO_DELAY = .45, INTRO_LEN = 2.1;
 const frozen = { on: false };
 
@@ -344,7 +372,7 @@ function drive(dt) {
   } else hero.mic.core.visible = false;
 
   if (silk.group.visible) silk.update(camera);
-  if (stage.group.visible) stage.update(s, time, camera, pixelRatio);
+  if (stage.group.visible) stage.update(s, calm ? 0 : time, camera, pixelRatio, calm);
   nights.update(s);
 
   // Petals, then confetti
@@ -363,6 +391,7 @@ function drive(dt) {
   else if (s < .3) { pu.uA.value.set('#ffffff'); pu.uB.value.set('#ffe9b0'); pu.uC.value.set('#f7c948'); }
   else { pu.uA.value.set('#ffb7d0'); pu.uB.value.set('#ff5a7a'); pu.uC.value.set('#f7c948'); }
 
+  if (calm) pu.uAmt.value = 0;
   const f = finish.uniforms;
   // The cut inside the mic: a white-gold flash, or a dark dip for reduced-motion viewers.
   const cutOn = smooth(s, .152, .168) * (1 - smooth(s, .172, .184));
@@ -387,14 +416,19 @@ function frame() {
   composer.render(dt);
 
   // Spend less on weaker phones and laptops rather than dropping frames.
-  frames++; msSum += dt * 1000;
+  const l = loadState();
+  if (l.done >= l.total) { frames++; msSum += dt * 1000; }   // image uploads are not a fair measure
   if (frames === 45) {
     const avg = msSum / frames;
     frames = 0; msSum = 0;
     if (avg > 30 && !window.__noAdapt) {
-      dropped++;
+      fast = 0;
       if (pixelRatio > .72) { pixelRatio = Math.max(.72, pixelRatio * .84); resize(true); }
       else bloom.enabled = false;
+    } else if (avg < 18 && ++fast >= 3) {
+      fast = 0;
+      if (!bloom.enabled) bloom.enabled = true;
+      else if (pixelRatio < maxRatio) { pixelRatio = Math.min(maxRatio, pixelRatio * 1.12); resize(true); }
     }
   }
 }
@@ -415,5 +449,14 @@ window.__show = {
   info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, tex: renderer.info.memory.textures, pr: pixelRatio, bloom: bloom.enabled }),
 };
 
-const go = () => { readScroll(); document.documentElement.classList.add('live'); frame(); };
+const go = () => {
+  readScroll();
+  s = target01;                        // a reload resumes where the visitor was, it does not replay the flight
+  const h = document.documentElement;
+  h.classList.add('js', 'live');
+  // Screen readers keep the plain text; the keyboard should not land on hidden links inside it.
+  document.querySelectorAll('#plain a').forEach((a) => { a.tabIndex = -1; });
+  renderer.compileAsync(scene, camera).catch(() => {});  // no shader stalls at the first flash or curtain
+  frame();
+};
 (document.fonts?.ready || Promise.resolve()).then(go);

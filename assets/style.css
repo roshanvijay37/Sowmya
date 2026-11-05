@@ -9,11 +9,11 @@ html { background: var(--ink); color: var(--paper); -webkit-text-size-adjust: 10
 html::-webkit-scrollbar { display: none; }
 body { background: var(--ink); font-family: "DM Mono", ui-monospace, Menlo, Consolas, monospace; overflow-x: hidden; }
 
-#gl { position: fixed; inset: 0; width: 100vw; height: 100lvh; display: block; pointer-events: none; }
+#gl { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100lvh; display: block; pointer-events: none; }
 #scroll { height: 1400vh; }
 
 /* What screen readers and search engines read; hidden from view while the 3D show runs. */
-#plain { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.js #plain { position: fixed; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 #hud { position: fixed; inset: 0; pointer-events: none; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
 .cue { transition: opacity .4s; position: absolute; left: var(--gut); bottom: calc(var(--gut) + env(safe-area-inset-bottom)); display: flex; gap: 12px; color: var(--paper); mix-blend-mode: difference; }
@@ -27,6 +27,7 @@ body { background: var(--ink); font-family: "DM Mono", ui-monospace, Menlo, Cons
 #hint { position: absolute; left: 50%; bottom: calc(var(--gut) + env(safe-area-inset-bottom)); transform: translateX(-50%); color: var(--gold); transition: opacity .5s; animation: bob 2.4s ease-in-out infinite; }
 @keyframes bob { 50% { translate: 0 6px; } }
 
+html:not(.js) .book { display: none; }
 .book {
   position: fixed; top: calc(var(--gut) + env(safe-area-inset-top)); right: var(--gut);
   padding: 11px 16px; min-height: 40px; display: inline-flex; align-items: center;
@@ -37,7 +38,7 @@ body { background: var(--ink); font-family: "DM Mono", ui-monospace, Menlo, Cons
   transition: background .3s, color .3s, opacity .4s;
 }
 .book:hover, .book:focus-visible { background: var(--gold); color: #1a1208; }
-.ended .book { opacity: 0; pointer-events: none; }
+.ended .book { opacity: 0; pointer-events: none; visibility: hidden; }
 
 #end {
   position: fixed; left: 0; right: 0; bottom: 0; text-align: center; opacity: 0; pointer-events: none;
@@ -56,7 +57,7 @@ body { background: var(--ink); font-family: "DM Mono", ui-monospace, Menlo, Cons
 }
 #end a:hover, #end a:focus-visible { transform: translateY(-2px); box-shadow: 0 10px 44px rgba(233, 201, 138, .5); }
 .credit { margin-top: 18px; font-size: 11px; letter-spacing: .04em; line-height: 1.5; color: rgba(246, 239, 228, .72); }
-#end .credit a { all: unset; cursor: pointer; color: var(--gold); text-decoration: underline; text-underline-offset: 3px; pointer-events: auto; }
+#end .credit a { all: unset; cursor: pointer; color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 #end .credit a:hover { color: var(--paper); }
 #end .credit a:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .ended .cue { opacity: 0; }
@@ -64,11 +65,38 @@ body { background: var(--ink); font-family: "DM Mono", ui-monospace, Menlo, Cons
 
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
-/* No WebGL: the same person, as a plain page. */
-.plain #gl, .plain #scroll, .plain #hud, .plain #end, .plain .book { display: none; }
-.plain #plain { position: static; width: auto; height: auto; overflow: visible; clip-path: none; max-width: 900px; margin: 0 auto; padding: 56px var(--gut); font-size: 15px; line-height: 1.7; }
-.plain #plain h1 { font-family: "Bodoni Moda", serif; font-style: italic; font-weight: 500; font-size: clamp(44px, 10vw, 84px); line-height: 1.05; }
-.plain #plain ul { margin: 22px 0; padding-left: 18px; }
-.plain .photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 24px 0; }
-.plain .photos img { width: 100%; display: block; border-radius: 6px; }
-.plain #plain a { color: var(--gold); }
+/* No WebGL, no script, or the show failed to start: the same person, as a plain page. */
+html:not(.js) #gl, html:not(.js) #scroll, html:not(.js) #hud, html:not(.js) #end, html:not(.js) #who { display: none; }
+html:not(.js) #plain { max-width: 900px; margin: 0 auto; padding: 56px var(--gut); font-size: 15px; line-height: 1.7; }
+html:not(.js) #plain h1 { font-family: "Bodoni Moda", serif; font-style: italic; font-weight: 500; font-size: clamp(44px, 10vw, 84px); line-height: 1.05; }
+html:not(.js) #plain ul { margin: 22px 0; padding-left: 18px; }
+html:not(.js) .photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 24px 0; }
+html:not(.js) .photos img { width: 100%; display: block; border-radius: 6px; }
+html:not(.js) #plain a { color: var(--gold); }
+
+#who {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--gut) + 28px + env(safe-area-inset-bottom)); text-align: center; pointer-events: none;
+  font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--paper); text-shadow: 0 1px 14px #000;
+  padding: 0 var(--gut);
+}
+@media (max-aspect-ratio: 1/1) { #who { bottom: auto; top: 66%; font-size: 11px; } }
+
+/* Layers over a live canvas are expensive on phones. */
+@media (pointer: coarse) {
+  .book { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(0, 0, 0, .55); }
+  .cue { mix-blend-mode: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #hint { animation: none; }
+  #cue-t.in { animation: none; }
+}
+/* Phone on its side: the closing words sit low and small, clear of her name. */
+@media (max-height: 500px) {
+  #end { padding: 7vh var(--gut) 10px; }
+  #end h2 { font-size: 30px; display: inline-block; vertical-align: middle; margin-right: 14px; }
+  #end a { margin-top: 0; padding: 9px 18px; font-size: 12px; vertical-align: middle; }
+  #end p { margin-top: 6px; }
+  #end .credit { margin-top: 4px; }
+  #who { bottom: 8px; font-size: 10px; }
+  #hint { display: none; }
+}

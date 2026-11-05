@@ -104,7 +104,7 @@ const cutVert = /* glsl */`
 varying vec2 vUv; varying vec3 vW;
 void main(){ vUv = uv; vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`;
 const cutFrag = /* glsl */`
-uniform sampler2D uMap; uniform float uOn, uIn, uMirror, uTime; uniform vec3 uRim;
+uniform sampler2D uMap; uniform float uOn, uIn, uMirror, uTime, uNear; uniform vec3 uRim;
 varying vec2 vUv; varying vec3 vW;
 void main(){
   vec2 uv = vUv;
@@ -112,7 +112,7 @@ void main(){
   if (uMirror > .5) { h = clamp(-vW.y/2.6, 0., 1.); if (h>=1.) discard; }
   vec4 t = uMirror > .5 ? textureLod(uMap, uv, 1.+h*4.) : texture2D(uMap, uv);
   if (t.a < .012) discard;
-  float a = t.a * uIn;
+  float a = t.a * uIn * uNear;
   vec3 c = t.rgb * mix(.3, 1., uOn);
   float soft = textureLod(uMap, uv, 4.5).a;
   float rim = clamp((1. - soft) * 1.9, 0., 1.);
@@ -128,7 +128,7 @@ export function cutout(name, opts = {}) {
   const geo = new THREE.PlaneGeometry(W, height);
   geo.translate(0, height / 2, 0);
   const uniforms = {
-    uMap: { value: null }, uOn: { value: 0 }, uIn: { value: 0 }, uMirror: { value: 0 },
+    uMap: { value: null }, uOn: { value: 0 }, uIn: { value: 0 }, uMirror: { value: 0 }, uNear: { value: 1 },
     uRim: { value: new THREE.Color(rim) }, uTime: shared.uTime,
   };
   const make = (m) => new THREE.ShaderMaterial({

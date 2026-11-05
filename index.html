@@ -18,6 +18,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<script>
+/* The plain page is the default; the show takes over only if its code really starts. */
+(function () { var h = document.documentElement; h.classList.add('js');
+  setTimeout(function () { if (!h.classList.contains('live')) h.classList.remove('js'); }, 9000); })();
+</script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Person","name":"Sowmya Kotian","jobTitle":"Emcee and Anchor","url":"https://sowmyakotian.com/","image":"https://sowmyakotian.com/assets/og.jpg","sameAs":["https://www.instagram.com/sowmyakotian_/"],"address":{"@type":"PostalAddress","addressLocality":"Mangaluru","addressCountry":"IN"}}
 </script>
@@ -33,11 +38,13 @@
   <div id="hint">Scroll</div>
 </div>
 
+<p id="who" aria-hidden="true">Emcee &amp; anchor · Mangaluru</p>
+
 <a class="book" href="https://www.instagram.com/sowmyakotian_/" target="_blank" rel="noopener">Book the night</a>
 
 <section id="end">
   <h2>Book the night</h2>
-  <a href="https://www.instagram.com/sowmyakotian_/" target="_blank" rel="noopener">@sowmyakotian_</a>
+  <a href="https://www.instagram.com/sowmyakotian_/" target="_blank" rel="noopener">Message on Instagram</a>
   <p>Emcee &amp; anchor · Mangaluru</p>
   <footer class="credit">Designed and developed with love by <a href="https://roshanvijay.com" target="_blank" rel="noopener">roshanvijay.com</a></footer>
 </section>
